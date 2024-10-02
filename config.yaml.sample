@@ -1,0 +1,21 @@
+# hahow使用
+course_url: ""
+authorization: ""
+
+
+# sat使用
+user_cookies:
+  i18n_redirected: 'zh'
+  G_ENABLED_IDPS: 'google'
+  initVec: ''
+  rehpic: ''  # 替换为你的真实rehpic值
+  acct: ''
+  SAT_AUTH: ''  # 替换为你的真实SAT_AUTH值
+
+course:
+  course_num: 47
+  course_url: 'https://sat.cool/classroom/{}'
+  content_base_url: 'https://api.sat.cool/api/v2/classroom/{}/vimeo'
+
+auth:
+  token: ''  # 替换为实际的 Bearer token
