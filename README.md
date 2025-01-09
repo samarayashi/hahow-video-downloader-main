@@ -1,6 +1,6 @@
 # hahow-video-downloader
 
-一键下载好学校 hahow.in 课程视频
+基於 [techmovie/hahow-video-downloader](https://github.com/techmovie/hahow-video-downloader) 的專案內容，我新增了知識衛星（SAT）的下載器 `sat_downloader.py`。基本上，它是完全獨立的內容，只是目前先放在同一個專案中進行管理。
 
 ## 获取 authorization 配置
 
@@ -10,13 +10,11 @@
 ## Usage
 
 - 修改 `config.yaml.sample` 为 `config.yaml`，然后将课程 URL 和上一步获取的到的 authorization 填写到配置文件中
-- 运行`pip install -t requirements.txt`
+- 运行`pip install -r requirements.txt`
 - 运行`python main.py`
 
 
 ## sat_downloader
-
-基於 [techmovie/hahow-video-downloader](https://github.com/techmovie/hahow-video-downloader) 的專案內容，我新增了知識衛星（SAT）的下載器 `sat_downloader.py`。基本上，它是完全獨立的內容，只是目前先放在同一個專案中進行管理。
 
 所有需要的配置都放在 `config.yaml` 文件中。要使用此下載器，可以在登入狀態下從課程頁面的 Network 中找到 `record_point`，其中會包含 `authorization` 的請求資訊。
 
