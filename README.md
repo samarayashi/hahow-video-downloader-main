@@ -1,5 +1,7 @@
 # hahow-video-downloader
 
+keyword: Hahow 好學校影片下載, sat知識衛星影片下載
+
 基於 [techmovie/hahow-video-downloader](https://github.com/techmovie/hahow-video-downloader) 的專案內容，我新增了知識衛星（SAT）的下載器 `sat_downloader.py`。基本上，它是完全獨立的內容，只是目前先放在同一個專案中進行管理。
 
 ## Usage
