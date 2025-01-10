@@ -18,12 +18,13 @@ keyword: Hahow 好學校影片下載, sat知識衛星影片下載
 # sat_downloader
 ## 配置sat(知識衛星的yaml)
 所有需要的配置都放在 `config.yaml` 文件中。要使用此下載器，
-1. 可以在登入狀態下從課程頁面的 Network 中找到 `record_point`，其中會包含 `authorization` 的請求資訊。
+1. 可以在登入狀態下從課程頁面的 Network 中找到 `record_point`，其中會包含 `authorization` 的請求資訊。![record_point](record_point.png)
 2. 另外，進入課程頁面的 `GET` 請求中，像是以下範例：
 Request URL: https://sat.cool/classroom/47 Request Method: GET
-可以找到帶有您 Google 登入狀態的 cookies。
-3. 影片有通常有240p、360p、、540p、720p、1080p畫質可以選擇
-4. 實際上我是得到有課程資源json，再把課程json的內容自動化下載而已。（所以可以從配置的步驟中讓，動作只停留在得到資源json）
+可以找到帶有您 Google 登入狀態的 cookies。![cookie](cookie.png)
+直接將整字串黏上即可
+4. 影片有通常有240p、360p、540p、720p、1080p畫質可以選擇
+5. 實際上我是得到有課程資源json，再把課程json的內容自動化下載而已。（所以可以從配置的步驟中讓，動作只停留在得到資源json）
 
 
 
