@@ -1,21 +1,22 @@
 # hahow使用
-course_url: ""
-authorization: ""
-
+course_url: null  # 課程 URL
+authorization: null  # 授權資訊
 
 # sat使用
-user_cookies:
-  i18n_redirected: 'zh'
-  G_ENABLED_IDPS: 'google'
-  initVec: ''
-  rehpic: ''  # 替换为你的真实rehpic值
-  acct: ''
-  SAT_AUTH: ''  # 替换为你的真实SAT_AUTH值
+cookies_string: null  # Cookies 字串
 
 course:
-  course_num: 47
-  course_url: 'https://sat.cool/classroom/{}'
-  content_base_url: 'https://api.sat.cool/api/v2/classroom/{}/vimeo'
+  course_num: 47  # 課程編號 int
 
 auth:
-  token: ''  # 替换为实际的 Bearer token
+  token: ""  # 替換為實際的 Bearer token
+
+# 定義程式行為
+fetch_course_content_json: true  # 是否抓取課程 JSON
+download_from_fetch_dict: true  # 是否直接從這次提取的 JSON 文件中下載
+download_from_existed_json: false  # 是否從已存在的 JSON 文件中下載
+existed_json_name: ""  # 已存在的 JSON 文件名稱
+
+# 下載參數
+desired_quality: '360p'  # 下載影片的品質，可選值: '240p', '360p', '540p', '720p', '1080p'
+base_path: './'  # 下載路徑
