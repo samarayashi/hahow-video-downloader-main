@@ -3,7 +3,6 @@ course_url: null  # 課程 URL
 authorization: null  # 授權資訊
 
 # sat使用
-cookies_string: null  # Cookies 字串
 
 course:
   course_num: 47  # 課程編號 int

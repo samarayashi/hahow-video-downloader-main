@@ -8,5 +8,5 @@ if __name__ == "__main__":
         downloader.download_course_videos()
         
     # 下載 sat 的影片
-    if global_config.get("cookies_string"):
+    if global_config["course"]["course_num"]:
         sat_downloader()

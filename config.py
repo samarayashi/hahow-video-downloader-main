@@ -11,10 +11,5 @@ class Config(object):
             config = yaml.load(f, Loader=yaml.FullLoader)
         return config
 
-    def update_config(self, key, value):
-        self.config[key] = value
-        with open(self.config_file, "w") as f:
-            yaml.dump(self.config, f, allow_unicode=True)
-
 
 global_config = Config().config
