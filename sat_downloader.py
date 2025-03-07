@@ -107,6 +107,15 @@ class CourseParser:
     """課程內容解析器"""
     
     @staticmethod
+    def format_duration(seconds: int) -> str:
+        """將秒數格式化為分鐘和秒"""
+        if not seconds:
+            return "無時長資訊"
+        minutes = seconds // 60
+        remaining_seconds = seconds % 60
+        return f"{minutes}分{remaining_seconds}秒"
+    
+    @staticmethod
     def format_course_structure(course_data: Dict) -> str:
         """格式化課程結構為易讀的文本
         
@@ -116,31 +125,44 @@ class CourseParser:
         Returns:
             格式化後的課程結構文本
         """
-        course_info = course_data.get('course', {})
-        teacher = course_data.get('teacher', {})
+        course_name = course_data.get('course_name', '未知課程')
         chapters = course_data.get('chapters', [])
         
         lines = []
-        lines.append(f"課程名稱: {course_info.get('name', '未知')}")
-        lines.append(f"講師: {teacher.get('nick_name', '未知')}")
+        lines.append(f"課程名稱: {course_name}")
         lines.append("")
         
+        total_duration = 0
         for chapter in chapters:
-            lines.append(f"{chapter.get('name')} (總時長: {chapter.get('total_duration')} 秒)")
+            chapter_title = chapter.get('chapter_title', '')
+            chapter_duration = chapter.get('chapter_duration', 0)
+            sub_chapters = chapter.get('sub_chapters', [])
             
-            for part in chapter.get('course_chapter_parts', []):
-                lines.append(f"  {part.get('name')} ({part.get('duration')} 秒)")
-                lines.append(f"  影片ID: {part.get('id')}")
+            # 計算章節總時長
+            chapter_total_duration = sum(sub.get('duration', 0) for sub in sub_chapters if 'error' not in sub)
+            total_duration += chapter_total_duration
+            
+            lines.append(f"{chapter_title} (總時長: {CourseParser.format_duration(chapter_total_duration)})")
+            
+            for sub_chapter in sub_chapters:
+                title = sub_chapter.get('title', '')
+                duration = sub_chapter.get('duration', 0)
+                
+                if 'error' in sub_chapter:
+                    lines.append(f"  {title} (獲取資訊失敗)")
+                else:
+                    lines.append(f"  {title} (時長: {CourseParser.format_duration(duration)})")
                 
                 # 列出課程材料
-                materials = part.get('materials', [])
+                materials = sub_chapter.get('materials', [])
                 if materials:
                     lines.append(f"  課程材料:")
                     for material in materials:
-                        lines.append(f"    - {material.get('name')}: {material.get('file_url')}")
+                        lines.append(f"    - {material.get('name')}: {material.get('url')}")
             
             lines.append("")
         
+        lines.append(f"課程總時長: {CourseParser.format_duration(total_duration)}")
         return "\n".join(lines)
 
 class CourseDataCollector:
@@ -178,9 +200,10 @@ class CourseDataCollector:
         """豐富課程資料，添加影片資源資訊"""
         logger.info("開始獲取每個影片的資源資訊...")
         
+        # 建立新的資料結構
         enriched_data = {
-            'course_info': course_data,
-            'videos_resources': {}
+            'course_name': course_data.get('course', {}).get('name', 'unknown_course'),
+            'chapters': []
         }
         
         chapters = course_data.get('chapters', [])
@@ -188,7 +211,12 @@ class CourseDataCollector:
         processed_count = 0
         
         for chapter in chapters:
-            chapter_name = chapter.get('name', 'Unknown Chapter')
+            chapter_data = {
+                'chapter_title': chapter.get('name', 'Unknown Chapter'),
+                'chapter_duration': chapter.get('duration', 0),  # 添加章節時長
+                'sub_chapters': []
+            }
+            
             for part in chapter.get('course_chapter_parts', []):
                 processed_count += 1
                 part_id = part.get('id')
@@ -202,19 +230,53 @@ class CourseDataCollector:
                 
                 try:
                     video_data = self.client.get_video_data(part_id)
-                    enriched_data['videos_resources'][part_id] = {
-                        'chapter_name': chapter_name,
-                        'part_name': part_name,
-                        'resources': video_data
+                    
+                    # 整理影片連結
+                    video_links = {}
+                    for file_info in video_data.get('files', []):
+                        rendition = file_info.get('rendition')
+                        link = file_info.get('link')
+                        if rendition and link:
+                            video_links[rendition] = link
+                    
+                    # 整理字幕連結
+                    subtitle_links = {}
+                    for subtitle in video_data.get('texttracks', []):
+                        if subtitle.get('type') == 'subtitles':
+                            lang = subtitle.get('language', 'unknown')
+                            link = subtitle.get('link')
+                            if link:
+                                subtitle_links[lang] = link
+                    
+                    # 建立子章節資料
+                    sub_chapter = {
+                        'title': part_name,
+                        'duration': part.get('duration', 0),  # 添加部分時長
+                        'video_links': video_links,
+                        'subtitle_links': subtitle_links
                     }
+                    
+                    # 添加課程材料
+                    materials = part.get('materials', [])
+                    if materials:
+                        sub_chapter['materials'] = [
+                            {
+                                'name': material.get('name'),
+                                'url': material.get('file_url')
+                            }
+                            for material in materials
+                        ]
+                    
+                    chapter_data['sub_chapters'].append(sub_chapter)
+                    
                 except Exception as e:
                     logger.error(f"獲取影片 {part_name} 資源資訊時出錯: {str(e)}")
-                    enriched_data['videos_resources'][part_id] = {
-                        'chapter_name': chapter_name,
-                        'part_name': part_name,
-                        'resources': None,
+                    chapter_data['sub_chapters'].append({
+                        'title': part_name,
                         'error': str(e)
-                    }
+                    })
+            
+            enriched_data['chapters'].append(chapter_data)
         
         return enriched_data
     
@@ -235,9 +297,7 @@ class CourseDataCollector:
     
     def _create_course_structure(self, data: Dict, output_dir: Path):
         """創建課程結構文件"""
-        structure_text = CourseParser.format_course_structure(
-            data.get('course_info', data)
-        )
+        structure_text = CourseParser.format_course_structure(data)
         structure_path = output_dir / "course_structure.txt"
         
         with open(structure_path, 'w', encoding='utf-8') as f:
@@ -247,13 +307,17 @@ class CourseDataCollector:
     
     def _get_course_name(self, data: Dict) -> str:
         """從數據中獲取課程名稱"""
+        # 直接從新的數據結構中獲取課程名稱
+        course_name = data.get('course_name', '')
+        if course_name:
+            return course_name
+            
+        # 如果找不到，嘗試從舊的數據結構中獲取（向後兼容）
         if 'course_info' in data:
             course_info = data['course_info']
-        else:
-            course_info = data
-        
-        if 'course' in course_info and 'name' in course_info['course']:
-            return course_info['course']['name']
+            if 'course' in course_info and 'name' in course_info['course']:
+                return course_info['course']['name']
+                
         return "unknown_course"
 
 class CourseContentDownloader:
@@ -269,56 +333,54 @@ class CourseContentDownloader:
             logger.error("無課程數據可下載")
             return
         
-        course_info = course_data.get('course_info', course_data)
-        videos_resources = course_data.get('videos_resources', {})
-        course_name = self._get_course_name(course_info)
+        course_name = course_data.get('course_name', 'unknown_course')
+        chapters = course_data.get('chapters', [])
         
         logger.info(f"開始下載課程: {course_name}")
         course_dir = self._prepare_course_directory()
         
-        self._process_chapters(course_info.get('chapters', []), course_dir, videos_resources)
+        for chapter_idx, chapter in enumerate(chapters, 1):
+            self._process_chapter(chapter, chapter_idx, course_dir)
+        
         logger.info(f"課程 {course_name} 下載完成")
     
-    def _process_chapters(self, chapters: List[Dict], course_dir: Path, videos_resources: Dict):
-        """處理所有章節的下載"""
-        for chapter_idx, chapter in enumerate(chapters, 1):
-            chapter_name = chapter.get('name', f"Chapter_{chapter_idx}")
-            chapter_dir = self._create_chapter_directory(course_dir, chapter_idx, chapter_name)
-            
-            logger.info(f"處理章節 {chapter_idx}/{len(chapters)}: {chapter_name}")
-            self._process_chapter_parts(chapter, chapter_dir, videos_resources)
-    
-    def _process_chapter_parts(self, chapter: Dict, chapter_dir: Path, videos_resources: Dict):
-        """處理章節中的所有部分"""
-        parts = chapter.get('course_chapter_parts', [])
-        for part_idx, part in enumerate(parts, 1):
-            part_id = part.get('id')
-            if not part_id:
-                continue
-            
-            video_resources = videos_resources.get(str(part_id), {}).get('resources')
-            if not video_resources:
-                continue
-            
-            self._download_part_content(part, part_idx, video_resources, chapter_dir)
-    
-    def _download_part_content(self, part: Dict, part_idx: int, video_resources: Dict, chapter_dir: Path):
-        """下載單個部分的內容（影片和字幕）"""
-        part_name = part.get('name', f"Part_{part_idx}")
-        video_url = self._get_video_url(video_resources)
+    def _process_chapter(self, chapter: Dict, chapter_idx: int, course_dir: Path):
+        """處理單個章節的下載"""
+        chapter_title = chapter.get('chapter_title', f"Chapter_{chapter_idx}")
+        chapter_dir = self._create_chapter_directory(course_dir, chapter_idx, chapter_title)
         
-        if video_url:
-            self._download_video(video_url, part_idx, part_name, chapter_dir)
-            self._download_subtitles(video_resources, part_idx, part_name, chapter_dir)
+        logger.info(f"處理章節 {chapter_idx}: {chapter_title}")
+        
+        for part_idx, part in enumerate(chapter.get('sub_chapters', []), 1):
+            self._process_sub_chapter(part, part_idx, chapter_dir)
     
-    def _get_video_url(self, video_resources: Dict) -> Optional[str]:
+    def _process_sub_chapter(self, part: Dict, part_idx: int, chapter_dir: Path):
+        """處理子章節的下載"""
+        part_title = part.get('title', f"Part_{part_idx}")
+        
+        if 'error' in part:
+            logger.error(f"    跳過影片 {part_title}: {part['error']}")
+            return
+        
+        # 下載影片
+        video_links = part.get('video_links', {})
+        if video_links:
+            video_url = self._get_video_url(video_links)
+            if video_url:
+                self._download_video(video_url, part_idx, part_title, chapter_dir)
+        
+        # 下載字幕
+        subtitle_links = part.get('subtitle_links', {})
+        if subtitle_links:
+            self._download_subtitles(subtitle_links, part_idx, part_title, chapter_dir)
+        
+        # 下載課程材料
+        materials = part.get('materials', [])
+        if materials:
+            self._download_materials(materials, part_idx, part_title, chapter_dir)
+    
+    def _get_video_url(self, video_links: Dict) -> Optional[str]:
         """獲取最適合的影片URL"""
-        video_links = {
-            file_info['rendition']: file_info['link']
-            for file_info in video_resources.get('files', [])
-            if file_info.get('rendition') and file_info.get('link')
-        }
-        
         if not video_links:
             return None
         
@@ -350,9 +412,9 @@ class CourseContentDownloader:
             logger.warning(f"    無法解析畫質數值，使用畫質: {quality}")
             return video_links[quality]
     
-    def _download_video(self, video_url: str, part_idx: int, part_name: str, chapter_dir: Path):
+    def _download_video(self, video_url: str, part_idx: int, part_title: str, chapter_dir: Path):
         """下載影片"""
-        video_filename = f"{part_idx:02d}_{FileUtils.sanitize_filename(part_name)}.mp4"
+        video_filename = f"{part_idx:02d}_{FileUtils.sanitize_filename(part_title)}.mp4"
         video_path = chapter_dir / video_filename
         
         if video_path.exists():
@@ -362,23 +424,35 @@ class CourseContentDownloader:
         logger.info(f"    下載影片: {video_filename}")
         self._download_file(video_url, video_path)
     
-    def _download_subtitles(self, video_resources: Dict, part_idx: int, part_name: str, chapter_dir: Path):
+    def _download_subtitles(self, subtitle_links: Dict, part_idx: int, part_title: str, chapter_dir: Path):
         """下載字幕"""
-        for subtitle in video_resources.get('texttracks', []):
-            if subtitle.get('type') != 'subtitles':
-                continue
-            
-            lang = subtitle.get('language', 'unknown')
-            subtitle_url = subtitle.get('link')
-            if not subtitle_url:
-                continue
-            
-            subtitle_filename = f"{part_idx:02d}_{FileUtils.sanitize_filename(part_name)}_{lang}.vtt"
+        for lang, subtitle_url in subtitle_links.items():
+            subtitle_filename = f"{part_idx:02d}_{FileUtils.sanitize_filename(part_title)}_{lang}.vtt"
             subtitle_path = chapter_dir / subtitle_filename
             
             if not subtitle_path.exists():
                 logger.info(f"    下載字幕: {subtitle_filename}")
                 self._download_file(subtitle_url, subtitle_path)
+    
+    def _download_materials(self, materials: List[Dict], part_idx: int, part_title: str, chapter_dir: Path):
+        """下載課程材料"""
+        materials_dir = chapter_dir / "materials"
+        materials_dir.mkdir(exist_ok=True, parents=True)
+        
+        for material in materials:
+            material_name = material.get('name', 'unknown')
+            material_url = material.get('url')
+            if not material_url:
+                continue
+            
+            # 從URL中提取文件擴展名
+            ext = material_url.split('.')[-1] if '.' in material_url else ''
+            material_filename = f"{part_idx:02d}_{FileUtils.sanitize_filename(part_title)}_{FileUtils.sanitize_filename(material_name)}.{ext}"
+            material_path = materials_dir / material_filename
+            
+            if not material_path.exists():
+                logger.info(f"    下載課程材料: {material_filename}")
+                self._download_file(material_url, material_path)
     
     def _download_file(self, url: str, path: Path) -> bool:
         """下載文件的通用方法"""
@@ -407,17 +481,11 @@ class CourseContentDownloader:
         course_dir.mkdir(exist_ok=True, parents=True)
         return course_dir
     
-    def _create_chapter_directory(self, course_dir: Path, chapter_idx: int, chapter_name: str) -> Path:
+    def _create_chapter_directory(self, course_dir: Path, chapter_idx: int, chapter_title: str) -> Path:
         """創建章節目錄"""
-        chapter_dir = course_dir / f"{chapter_idx:02d}_{FileUtils.sanitize_filename(chapter_name)}"
+        chapter_dir = course_dir / f"{chapter_idx:02d}_{FileUtils.sanitize_filename(chapter_title)}"
         chapter_dir.mkdir(exist_ok=True, parents=True)
         return chapter_dir
-    
-    def _get_course_name(self, course_info: Dict) -> str:
-        """獲取課程名稱"""
-        if 'course' in course_info and 'name' in course_info['course']:
-            return course_info['course']['name']
-        return "unknown_course"
 
 class FileUtils:
     """文件操作工具類"""
@@ -440,13 +508,8 @@ class CourseInfoDisplay:
         Args:
             course_data: 課程資料字典
         """
-        if 'course_info' not in course_data:
-            logger.warning("無法顯示課程資訊：資料結構不完整")
-            return
-            
-        course_info = course_data['course_info']
-        course_name = course_info.get('course', {}).get('name', '未知課程')
-        chapters = course_info.get('chapters', [])
+        course_name = course_data.get('course_name', '未知課程')
+        chapters = course_data.get('chapters', [])
         
         # 顯示基本資訊
         logger.info("\n=== 課程資訊 ===")
@@ -454,18 +517,24 @@ class CourseInfoDisplay:
         logger.info(f"章節數量: {len(chapters)}")
         
         # 計算總影片數
-        total_videos = sum(len(chapter.get('course_chapter_parts', [])) for chapter in chapters)
+        total_videos = sum(len(chapter.get('sub_chapters', [])) for chapter in chapters)
         logger.info(f"影片總數: {total_videos}")
         
-        # 顯示影片資源資訊
-        if 'videos_resources' in course_data:
-            videos_resources = course_data['videos_resources']
-            total_resources = len(videos_resources)
-            success_resources = sum(1 for v in videos_resources.values() if v.get('resources') is not None)
+        # 計算成功和失敗的資源數
+        success_count = 0
+        failed_count = 0
+        for chapter in chapters:
+            for sub_chapter in chapter.get('sub_chapters', []):
+                if 'error' in sub_chapter:
+                    failed_count += 1
+                else:
+                    success_count += 1
+        
+        if success_count + failed_count > 0:
             logger.info("\n=== 影片資源資訊 ===")
-            logger.info(f"總資源數: {total_resources}")
-            logger.info(f"成功獲取: {success_resources}")
-            logger.info(f"失敗數量: {total_resources - success_resources}")
+            logger.info(f"總資源數: {success_count + failed_count}")
+            logger.info(f"成功獲取: {success_count}")
+            logger.info(f"失敗數量: {failed_count}")
         
         logger.info("=" * 30)
 
