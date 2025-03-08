@@ -6,10 +6,10 @@ keyword: Hahow 好學校影片下載, sat知識衛星影片下載
 
 基於 [techmovie/hahow-video-downloader](https://github.com/techmovie/hahow-video-downloader) 的專案內容，我新增了知識衛星（SAT）的下載器 `sat_downloader.py`。基本上，它是完全獨立的內容，只是目前先放在同一個專案中進行管理。
 
-## Usage
-- 修改 `config.yaml.sample` 为 `config.yaml`，依據其中內容做修改成自己上課url, authorization等配置yaml
-- 运行`pip install -r requirements.txt`
-- 运行`python main.py`
+## 使用方法
+- 修改 `config.yaml.sample` 為 `config.yaml`，依據其中內容做修改成自己上課url, authorization等配置yaml
+- 執行`pip install -r requirements.txt`
+- 執行`python main.py`
 
 # Hahow downloader
 ## 得到 hahow authorization 配置的方法
